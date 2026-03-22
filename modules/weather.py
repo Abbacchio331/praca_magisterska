@@ -10,24 +10,24 @@ PROCESSING_ERROR_VOICE_LOCATION: str = SOUNDS_PATH + "processing_error.wav"
 
 en_to_pl_weather_kind = lambda kind: kinds_dict[str(kind).upper()]
 kinds_dict: dict = {
-    "SUNNY": "Jest słonecznie.",
-    "PARTLY CLOUDY": "Jest częściowe zachmurzenie.",
-    "CLOUDY": "Jest pochmurnie.",
-    "VERY CLOUDY": "Jest duże zachmurzenie.",
-    "FOG": "Jest mgła.",
-    "LIGHT SHOWERS": "Są słabe przelotne opady deszczu.",
-    "LIGHT SLEET SHOWERS": "Są słabe przelotne opady deszczu ze śniegiem.",
-    "LIGHT SLEET": "Jest słaby deszcz ze śniegiem.",
-    "THUNDERY SHOWERS": "Są przelotne opady z burzą.",
-    "LIGHT SNOW": "Są słabe opady śniegu.",
-    "HEAVY SNOW": "Są obfite opady śniegu.",
-    "LIGHT RAIN": "Jest słaby deszcz.",
-    "HEAVY SHOWERS": "Są intensywne przelotne opady deszczu.",
-    "HEAVY RAIN": "Są intensywne opady deszczu.",
-    "LIGHT SNOW SHOWERS": "Są słabe przelotne opady śniegu.",
-    "HEAVY SNOW SHOWERS": "Są intensywne przelotne opady śniegu.",
-    "THUNDERY HEAVY RAIN": "Jest intensywny deszcz z burzą.",
-    "THUNDERY SNOW SHOWERS": "Są przelotne opady śniegu z burzą."
+    "SUNNY": "Słonecznie.",
+    "PARTLY CLOUDY": "Częściowe zachmurzenie.",
+    "CLOUDY": "Pochmurnie.",
+    "VERY CLOUDY": "Duże zachmurzenie.",
+    "FOG": "Mgła.",
+    "LIGHT SHOWERS": "Słabe przelotne opady deszczu.",
+    "LIGHT SLEET SHOWERS": "Słabe przelotne opady deszczu ze śniegiem.",
+    "LIGHT SLEET": "Słaby deszcz ze śniegiem.",
+    "THUNDERY SHOWERS": "Przelotne opady z burzą.",
+    "LIGHT SNOW": "Słabe opady śniegu.",
+    "HEAVY SNOW": "Obfite opady śniegu.",
+    "LIGHT RAIN": "Słaby deszcz.",
+    "HEAVY SHOWERS": "Intensywne przelotne opady deszczu.",
+    "HEAVY RAIN": "Intensywne opady deszczu.",
+    "LIGHT SNOW SHOWERS": "Słabe przelotne opady śniegu.",
+    "HEAVY SNOW SHOWERS": "Intensywne przelotne opady śniegu.",
+    "THUNDERY HEAVY RAIN": "Intensywny deszcz z burzą.",
+    "THUNDERY SNOW SHOWERS": "Przelotne opady śniegu z burzą."
 }
 
 def validate_date(date: str) -> datetime.date | None:
@@ -36,8 +36,8 @@ def validate_date(date: str) -> datetime.date | None:
     return None
 
 def pl_weather(temp, kind: Kind | None = None) -> str:
-    return f"Temperatura wynosi {temp} stopni Celsjusza. {en_to_pl_weather_kind(kind)}" \
-        if kind else f"Temperatura wynosi {temp} stopni Celsjusza"
+    return f"{temp} stopni Celsjusza. {en_to_pl_weather_kind(kind)}" \
+        if kind else f"{temp} stopni Celsjusza"
 
 async def get_weather(city: str, date: str) -> str | None:
     date: datetime.date | None = validate_date(date)
