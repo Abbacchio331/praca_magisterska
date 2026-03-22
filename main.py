@@ -1,7 +1,9 @@
 import asyncio
 import pyaudio
 import pvporcupine
+from modules.large_variables import CORE_PROMPT, NAMED_PROMPTS
 from modules.youtube import YouTubeSession
+from modules.weather import say_weather
 from modules.speech import get_respeaker_index, rec, speech_to_text, listen_for_keyword, play_voice, text_to_speech
 from google import genai
 from google.genai.types import GenerateContentConfig, ThinkingConfig
@@ -18,72 +20,36 @@ button_event_queue = asyncio.Queue()
 # Start Gemini AI session
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-NOT_UNDERSTAND_VOICE_LOCATION = "assets/sounds/not_understand.wav"
-THINKING_VOICE_LOCATION = "assets/sounds/thinking.wav"
-YT_SEARCH_VOICE_LOCATION = "assets/sounds/youtube_search.wav"
-SETUP_VOICE_LOCATION = "assets/sounds/setup.wav"
+SOUNDS_PATH: str = "assets/sounds/"
+NOT_UNDERSTAND_VOICE_LOCATION: str = SOUNDS_PATH + "not_understand.wav"
+COMMUNICATION_ERROR_VOICE_LOCATION: str = SOUNDS_PATH + "communication_error.wav"
+THINKING_VOICE_LOCATION: str = SOUNDS_PATH + "thinking.wav"
+YT_SEARCH_VOICE_LOCATION: str = SOUNDS_PATH + "youtube_search.wav"
+SETUP_VOICE_LOCATION: str = SOUNDS_PATH + "setup.wav"
+REBOOT_VOICE_LOCATION: str = SOUNDS_PATH + "reboot.wav"
+RETRY_LIMIT: int = 2  # Ile razy prosić o powtórzenie, gdy nie zrozumiano polecenia
+gemini_tools: list = ["PLAY", "ANSWER", "RESUME", "PAUSE", "WEATHER"]
 
-gemini_tools = ["PLAY", "ANSWER", "RESUME", "PAUSE"]
 
 class GeminiAnswer(BaseModel):
     tool: str
     content: str
 
-async def ask_gemini(question: str, available_tools: list = gemini_tools):
+def ask_gemini(question: str):
     """
     Asks the Gemini AI a question and receives a structured response.
 
     Args:
         question (str): The user's question.
-        available_tools (list): A list of available tools.
 
     Returns:
         GeminiAnswer: An instance of the GeminiAnswer class with the structured response.
     """
-    system_prompt = """
-    Jesteś inteligentnym asystentem stworzonym do przetwarzania próśb użytkownika i odpowiadania na nie w sposób ustrukturyzowany.
-    Miej na uwadze, że twoja odpowiedź będzie przeczytana na głos przy użyciu TTS, więc nie używaj transkrypcji napisów w innych językach (grecki, koreański, rosyjski, ...) na alfabet łaciński.
-    Ponadto liczby w twojej odpowiedzi powinny być zapisywane słownie. Mówiąc o sobie, używaj żeńskich zaimków. 
-    Twoja odpowiedź musi zawsze odnościć się do poniższego schematu:
-    {
-        "tool": "string",
-        "content": "string"
-    }
-
-    Oto narzędzia z których możesz korzystać:
-    """
-    if "PLAY" in available_tools:
-        system_prompt += """
-        1. **tool: 'PLAY'**
-        * Użyj go kiedy użytkownik prosi o odtworzenie jakiejś piosenki.
-        * 'content' zawsze powinien być tytułem piosenki o który prosi użytkownik.
-        * Przykład: Użytkownik: "Odtwórz Bohemian Rhapsody" -> {"tool": "PLAY", "content": "Bohemian Rhapsody"}
-        * Jeśli użytkownik nie sprecyzuje jakiej piosenki chce posłuchać wybierz dowolną.
-        """
-    if "ANSWER" in available_tools:
-        system_prompt += """
-        2. **tool: 'ANSWER'**
-        * Użyj go, kiedy użytkownik zada ci pytanie, które wymaga bezpośredniej odpowiedzi.
-        * 'content' zawsze powinien być odpowiedzią na zadane pytanie.
-        * Jeśli używasz słów w języku obcym, podawaj TYLKO oryginalny zapis. Nie dodawaj wymowy ani transkrypcji w nawiasach.
-        * Przykład: Użytkownik: "Jaka jest stolica Francji?" -> {"tool": "ANSWER", "content": "Paryż jest stolicą Francji."}
-        * Twoja wypowiedź powinna mieć maksymalnie 3 zdania.
-        """
-    if "RESUME" in available_tools:
-        system_prompt += """
-        2. **tool: 'RESUME'**
-        * Kiedy użytkownik poprosi cię o wznowienie oddtwarzania piosenki.
-        * 'content' zawsze powinien być równy pustemu ciągowi tekstowemu.
-        * Przykład: Użytkownik: "Wznów oddtwarzanie." -> {"tool": "RESUME", "content": ""}
-        """
-    if "PAUSE" in available_tools:
-        system_prompt += """
-        2. **tool: 'PAUSE'**
-        * Kiedy użytkownik poprosi cię o zatrzymanie oddtwarzania piosenki.
-        * 'content' zawsze powinien być równy pustemu ciągowi tekstowemu.
-        * Przykład: Użytkownik: "Zatrzymaj oddtwarzanie." -> {"tool": "PAUSE", "content": ""}
-        """
-    full_prompt = system_prompt + "\nZawsze używaj odpowiedniego narzędzia w zależności od kontekstu.\nUżytkownik mówi: " + question
+    system_prompt: str = CORE_PROMPT
+    for prompt_name, prompt_text in NAMED_PROMPTS.items():
+        system_prompt += prompt_text
+    full_prompt = (system_prompt +
+                   "\nZawsze używaj odpowiedniego narzędzia w zależności od kontekstu.\nUżytkownik mówi: " + question)
     
     response_schema = {
         "type": "OBJECT",
@@ -113,13 +79,22 @@ async def handle_gemini_answer(yt: YouTubeSession, tool: str, content: str):
         await play_voice(YT_SEARCH_VOICE_LOCATION)
         await yt.find_and_a_play_song(content)
     elif tool == "ANSWER":
-        await play_voice(THINKING_VOICE_LOCATION)
         await yt.stop_song()
+        await play_voice(THINKING_VOICE_LOCATION)
         await text_to_speech(content)
     elif tool == "RESUME":
         await yt.resume_song()
     elif tool == "PAUSE":
         await yt.stop_song()
+    elif tool == "WEATHER":
+        await yt.stop_song()
+        await play_voice(THINKING_VOICE_LOCATION)
+        await say_weather(content)
+    elif tool == "REBOOT":
+        await yt.stop_song()
+        await play_voice(REBOOT_VOICE_LOCATION)
+        await asyncio.sleep(2)
+        await asyncio.create_subprocess_shell('sudo reboot')
 
 
 async def interactive_console(respeaker_index: int, yt: YouTubeSession):    
@@ -129,25 +104,29 @@ async def interactive_console(respeaker_index: int, yt: YouTubeSession):
         keyword_paths=['assets/Mamma-Mia_it_raspberry-pi_v3_0_0.ppn'],
         model_path='assets/porcupine_params_it.pv'
     )
-    print("Created the audio instances")
+    print("Stworzono instancję audio.")
     try:
         while True:
-            if(await listen_for_keyword(pa, respeaker_index, porcupine)):
+            if await listen_for_keyword(pa, respeaker_index, porcupine):
+                retry_count = 0
                 while True:
-                    await rec(pa, respeaker_index, porcupine.frame_length)  # ignore
+                    await rec(pa, respeaker_index, porcupine.frame_length)
                     user_input = await speech_to_text()
                     if not isinstance(user_input, str):
-                        # await text_to_speech("Nie rozumiem co mówisz. Powtórz")
-                        await play_voice(NOT_UNDERSTAND_VOICE_LOCATION)
-                        continue
-                    gemini_answer = await ask_gemini(user_input)
+                        if retry_count < RETRY_LIMIT:
+                            await play_voice(NOT_UNDERSTAND_VOICE_LOCATION)
+                            continue
+                        else:
+                            await play_voice(COMMUNICATION_ERROR_VOICE_LOCATION)
+                            break
+                    gemini_answer = ask_gemini(user_input)
                     if gemini_answer.tool in gemini_tools:
                         await handle_gemini_answer(yt, gemini_answer.tool, gemini_answer.content)
                         break
     finally:
         porcupine.delete()
         pa.terminate()
-        print("Terminated the audio instances")
+        print("Zamknięto instancję audio.")
 
 async def main():
     yt = YouTubeSession()

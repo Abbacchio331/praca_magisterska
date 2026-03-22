@@ -1,8 +1,8 @@
 import asyncio
 from modules.speech import text_to_speech
 
-content: str = "Cześć. Możesz mnie zawołać mówiąc: mamma mija. Po krótkiej chwili możesz zadać pytanie lub poprosić o odtworzenie piosenki."
-loc: str = "assets/sounds/setup.wav"
+content: str = "Zatrzymałam oddtwarzanie piosenki."
+loc: str = "assets/sounds/stopped_song.wav"
 
 async def main():
     await text_to_speech(content, loc)
