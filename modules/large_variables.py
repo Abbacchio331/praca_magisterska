@@ -55,6 +55,12 @@ REBOOT_PROMPT: str = """
 * 'content' zawsze powinien być równy pustemu ciągowi tekstowemu.
 * Przykład: Użytkownik: "Zrestartuj system." -> {"tool": "REBOOT", "content": ""}
 """
+POWEROFF_PROMPT: str = """
+6. **tool: 'POWEROFF'**
+* Kiedy użytkownik poprosi cię o wyłączenie systemu.
+* 'content' zawsze powinien być równy pustemu ciągowi tekstowemu.
+* Przykład: Użytkownik: "Wyłącz system." -> {"tool": "POWEROFF", "content": ""}
+"""
 
 NAMED_PROMPTS = {
     "PLAY": PLAY_PROMPT,
@@ -62,5 +68,6 @@ NAMED_PROMPTS = {
     "PAUSE": PAUSE_PROMPT,
     "ANSWER": ANSWER_PROMPT,
     "WEATHER": WEATHER_PROMPT,
-    "REBOOT": REBOOT_PROMPT
+    "REBOOT": REBOOT_PROMPT,
+    "POWEROFF": POWEROFF_PROMPT
 }

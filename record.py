@@ -1,8 +1,8 @@
 import asyncio
 from modules.speech import text_to_speech
 
-content: str = "Zatrzymałam oddtwarzanie piosenki."
-loc: str = "assets/sounds/stopped_song.wav"
+content: str = "Wyłączam system."
+loc: str = "assets/sounds/poweroff.wav"
 
 async def main():
     await text_to_speech(content, loc)
