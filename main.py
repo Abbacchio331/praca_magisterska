@@ -14,15 +14,8 @@ import time
 import os
 import re
 
-# Read the environmental variables
 load_dotenv()
-
-# Shared asyncio queue to communicate between button and console
-button_event_queue = asyncio.Queue()
-
-# Start Gemini AI session
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-
 SOUNDS_PATH: str = "assets/sounds/"
 NOT_UNDERSTAND_VOICE_LOCATION: str = SOUNDS_PATH + "not_understand.wav"
 COMMUNICATION_ERROR_VOICE_LOCATION: str = SOUNDS_PATH + "communication_error.wav"
@@ -44,13 +37,13 @@ class GeminiAnswer(BaseModel):
 
 def ask_gemini(question: str):
     """
-    Asks the Gemini AI a question and receives a structured response.
+    Zadaje pytanie Gemini AI i otrzymuje ustrukturyzowaną odpowiedź.
 
     Args:
-        question (str): The user's question.
+        question (str): Pytanie od użytkownika.
 
     Returns:
-        GeminiAnswer: An instance of the GeminiAnswer class with the structured response.
+        GeminiAnswer: Instancja klasy GeminiAnswer z ustrukturyzowaną odpowiedzią.
     """
     system_prompt: str = CORE_PROMPT
     for prompt_name, prompt_text in NAMED_PROMPTS.items():
@@ -83,11 +76,11 @@ def ask_gemini(question: str):
 
 async def handle_gemini_answer(yt: YouTubeSession, tool: str, content: str):
     if tool == "PLAY":
-        await play_voice(YT_SEARCH_VOICE_LOCATION)
+        play_voice(YT_SEARCH_VOICE_LOCATION)
         await yt.find_and_a_play_song(content)
     elif tool == "ANSWER":
         await yt.stop_song()
-        await play_voice(THINKING_VOICE_LOCATION)
+        play_voice(THINKING_VOICE_LOCATION)
         await text_to_speech(content)
     elif tool == "RESUME":
         await yt.resume_song()
@@ -95,67 +88,76 @@ async def handle_gemini_answer(yt: YouTubeSession, tool: str, content: str):
         await yt.stop_song()
     elif tool == "WEATHER":
         await yt.stop_song()
-        await play_voice(THINKING_VOICE_LOCATION)
+        play_voice(THINKING_VOICE_LOCATION)
         await say_weather(content)
     elif tool == "REBOOT":
         await yt.stop_song()
-        await play_voice(REBOOT_VOICE_LOCATION)
+        play_voice(REBOOT_VOICE_LOCATION)
         await asyncio.sleep(2)
         await asyncio.create_subprocess_shell('sudo reboot')
     elif tool == "POWEROFF":
         await yt.stop_song()
-        await play_voice(POWEROFF_VOICE_LOCATION)
+        play_voice(POWEROFF_VOICE_LOCATION)
         await asyncio.sleep(2)
         await asyncio.create_subprocess_shell('sudo poweroff')
 
 
-async def interactive_console(respeaker_index: int, yt: YouTubeSession):    
+async def interactive_console(respeaker_index: int, yt: YouTubeSession):
     pa = pyaudio.PyAudio()
     porcupine = pvporcupine.create(
         access_key=os.environ.get("PORCUPINE_KEY"),
         keyword_paths=['assets/Mamma-Mia_it_raspberry-pi_v3_0_0.ppn'],
         model_path='assets/porcupine_params_it.pv'
     )
+
     print("Stworzono instancję audio.")
+
     try:
         while True:
-            if await listen_for_keyword(pa, respeaker_index, porcupine):
+            if listen_for_keyword(pa, respeaker_index, porcupine):
+
                 if not check_network_connection():
-                    await play_voice(LOST_NETWORK_VOICE_LOCATION)
+                    play_voice(LOST_NETWORK_VOICE_LOCATION)
                     break
-                await play_voice(LISTENING_START_VOICE_LOCATION)
-                while True:
-                    retry_count = 0
-                    await rec(pa, respeaker_index, porcupine.frame_length)
-                    user_input = await speech_to_text()
-                    if not isinstance(user_input, str):
-                        if retry_count < RETRY_LIMIT:
-                            await play_voice(NOT_UNDERSTAND_VOICE_LOCATION)
-                            retry_count += 1
-                            continue
-                        else:
-                            await play_voice(COMMUNICATION_ERROR_VOICE_LOCATION)
-                            break
-                    gemini_answer = ask_gemini(user_input)
-                    if gemini_answer.tool in gemini_tools:
-                        await handle_gemini_answer(yt, gemini_answer.tool, gemini_answer.content)
-                        break
-                    else:
-                        if retry_count < RETRY_LIMIT:
-                            await play_voice(NOT_UNDERSTAND_VOICE_LOCATION)
-                            retry_count += 1
-                            continue
-                        else:
-                            await play_voice(COMMUNICATION_ERROR_VOICE_LOCATION)
-                            break
+
+                play_voice(LISTENING_START_VOICE_LOCATION)
+                await handle_interaction(pa, respeaker_index, porcupine.frame_length, yt)
+
     finally:
         porcupine.delete()
         pa.terminate()
         print("Zamknięto instancję audio.")
 
 
+async def handle_interaction(pa, respeaker_index: int, frame_length: int, yt: YouTubeSession):
+    """Obsługuje logikę nasłuchiwania i wysyłania komend do Gemini po wybudzeniu."""
+    retry_count = 0
+
+    while True:
+        rec(pa, respeaker_index, frame_length)
+        user_input = speech_to_text()
+
+        success = False
+        if isinstance(user_input, str):
+            gemini_answer = ask_gemini(user_input)
+
+            if gemini_answer.tool in gemini_tools:
+                await handle_gemini_answer(yt, gemini_answer.tool, gemini_answer.content)
+                success = True
+
+        if success:
+            break
+
+        if retry_count < RETRY_LIMIT:
+            play_voice(NOT_UNDERSTAND_VOICE_LOCATION)
+            retry_count += 1
+        else:
+            play_voice(COMMUNICATION_ERROR_VOICE_LOCATION)
+            break
+
+
 def check_network_connection() -> bool:
-    """Returns True if there is an active network connection"""
+    """Zwraca True, jeżeli połączenie sieciowe jest aktywne."""
     try:
         result = subprocess.run(
             ["nmcli", "-t", "-f", "STATE", "general"],
@@ -169,7 +171,7 @@ def check_network_connection() -> bool:
 
 
 def connect_with_wifi() -> bool:
-    """Returns True if connected with Wi-Fi successfully (or already connected)"""
+    """Zwraca True, jeżeli udało się połączyć z Wi-Fi."""
 
     if not os.path.exists(WIFI_CONFIG_PATH):
         print("Błąd: Brak pliku konfiguracyjnego Wi-Fi.")
@@ -224,11 +226,11 @@ async def main():
     if check_network_connection() or connect_with_wifi():
         yt = YouTubeSession()
         await yt.open_the_search_page()
-        respeaker_index: int = await get_respeaker_index()
-        await play_voice(SETUP_VOICE_LOCATION)
+        respeaker_index: int = get_respeaker_index()
+        play_voice(SETUP_VOICE_LOCATION)
         await interactive_console(respeaker_index, yt)
     else:
-        await play_voice(FAILED_SETUP_VOICE_LOCATION)
+        play_voice(FAILED_SETUP_VOICE_LOCATION)
 
 if __name__ == "__main__":
     asyncio.run(main())

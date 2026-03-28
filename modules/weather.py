@@ -49,7 +49,7 @@ async def get_weather(city: str, date: str) -> str | None:
             weather: python_weather.Forecast = await client.get(city)
             for daily_forecast in weather:
                 if daily_forecast.date == date:
-                    return pl_weather(daily_forecast.temperature) if not date == datetime.date.today() else pl_weather(weather.temperature, weather.kind)
+                    return pl_weather(daily_forecast.temperature) if date != datetime.date.today() else pl_weather(weather.temperature, weather.kind)
             print("Date not found")
             return None
     except python_weather.errors.RequestError as error:
@@ -78,10 +78,10 @@ def parse_ai_weather_response(ai_string: str) -> tuple:
 async def say_weather(content: str):
     city, date = parse_ai_weather_response(content)
     if not city or not date:
-        await play_voice(PROCESSING_ERROR_VOICE_LOCATION)
+        play_voice(PROCESSING_ERROR_VOICE_LOCATION)
     else:
         weather: str = await get_weather(city, date)
         if weather is not None:
             await text_to_speech(weather)
         else:
-            await play_voice(PROCESSING_ERROR_VOICE_LOCATION)
+            play_voice(PROCESSING_ERROR_VOICE_LOCATION)

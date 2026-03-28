@@ -46,7 +46,7 @@ class YouTubeSession:
     async def find_and_a_play_song(self, title: str, wait_time: int = 30):
         if self.page is None:
             print("Strona nie istnieje.")
-            await play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
+            play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
             return
 
         print(f"Szukam '{title}'...")
@@ -58,19 +58,17 @@ class YouTubeSession:
             await search_input.press("Enter")
         else:
             print("Nie znaleziono pola wpisywania.")
-            await play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
+            play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
             return
 
         await self.page.wait_for_timeout(wait_time * 50)
         await self.page.wait_for_load_state("networkidle", timeout=wait_time * 1000)
         found_page_html = await self.page.content()
         print(f"Szukanie '{title}' zakończone.")
-        # with open('debug_search_result1.html', 'w', encoding='utf-8') as f:
-        #     f.write(found_page_html)
 
         page_type_search: list = findall(r'(?i)(yt-core-attributed-string--white-space-no-wrap"[^>]*?>\s*Play\s*<|ytmusic-shelf-renderer"[^>]*?>\s*songs\s*<|id="undercards")', found_page_html)
         if not page_type_search or not findall(r'(?i)\b(play|songs|undercards)\b', page_type_search[0]):
-            await play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
+            play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
             return
 
         title_search: list | None = None
@@ -85,7 +83,7 @@ class YouTubeSession:
             title = title_search[0]
         else:
             print("Nie znaleziono piosenki")
-            await play_voice(SONG_NOT_FOUND_ERROR)
+            play_voice(SONG_NOT_FOUND_ERROR)
             return
 
         print(f"Uruchamiam '{title}'...")
@@ -102,48 +100,56 @@ class YouTubeSession:
         # Start monitoring ads
         return True, found_page_html
 
+    @staticmethod
+    def _extract_title(html: str) -> str:
+        """Pobiera aktualny tytuł z paska YouTube Music."""
+        matches = findall(r'class="title style-scope ytmusic-player-bar"[^>]*?>\s*([^<]*?)\s*<', html)
+        return matches[0] if matches else ""
+
+    async def _mute_ad(self):
+        """Wycisza odtwarzacz, ignorując błędy timeout."""
+        try:
+            await self.page.locator('button[aria-label="Mute"]').first.click(timeout=1000)
+        except Exception as e:
+            if "timeout" not in str(e).lower():
+                print("Nie można wyciszyć tej reklamy.\nPowód:", e)
+
+    async def _skip_ad_if_possible(self, html: str):
+        """Sprawdza obecność przycisku i próbuje pominąć reklamę."""
+        if "ytp-ad-skip-button-modern" in html:
+            try:
+                await self.page.locator('.ytp-ad-skip-button-modern').first.click()
+                print("Pominięto reklamę.")
+            except Exception as e:
+                print("Nie udało się pominąć reklamy\nPowód:", e)
+
+    async def _unmute_song(self):
+        """Odcisza odtwarzacz po zakończeniu reklamy."""
+        try:
+            await self.page.locator('button[aria-label="Unmute"]').first.click(timeout=1000)
+        except Exception as e:
+            if "timeout" not in str(e).lower():
+                print("Nie udało się odciszyć piosenki.\nPowód:", e)
+
     async def monitor_ad_status(self, title: str):
         print("Rozpoczęto monitorowanie reklam...")
+
         while True:
             try:
                 html = await self.page.content()
+                current_title = self._extract_title(html)
 
-                # Get current title from bottom bar
-                title_2_matches = findall(r'class="title style-scope ytmusic-player-bar"[^>]*?>\s*([^<]*?)\s*<', html)
-                title_2 = title_2_matches[0] if title_2_matches else ""
-
-                is_ad = title_2 != title
-                # print(f"? title_2 = '{title_2}', ad = {is_ad}")
+                is_ad = current_title != title
 
                 if is_ad:
-                    # Mute if ad is playing
-                    # print("? Muting...")
-                    try:
-                        await self.page.locator('button[aria-label="Mute"]').first.click(timeout=1000)
-                    except Exception as e:
-                        if "timeout" in str(e).lower():
-                            pass
-                        else:
-                            print("Nie można wyciszyć tej reklamy.\nPowód:", e)
-
-                    # Skip ad if possible
-                    if "ytp-ad-skip-button-modern" in html:
-                        try:
-                            await self.page.locator('.ytp-ad-skip-button-modern').first.click()
-                            print("Pominięto reklamę.")
-                        except Exception as e:
-                            print("Nie udało się pominąć reklamy\nPowód:", e)
+                    await self._mute_ad()
+                    await self._skip_ad_if_possible(html)
                     await asyncio.sleep(2)
                 else:
-                    try:
-                        await self.page.locator('button[aria-label="Unmute"]').first.click(timeout=1000)
-                    except Exception as e:
-                        if "timeout" in str(e).lower():
-                            pass
-                        else:
-                            print("Nie udało się odciszyć piosenki.\nPowód:", e)
+                    await self._unmute_song()
                     print("Rozpoczęto oddtwarzanie!")
                     break
+
             except Exception as e:
                 print("Błąd w monitorowaniu:", e)
                 break
@@ -155,11 +161,10 @@ class YouTubeSession:
         except Exception as e:
             if "timeout" in str(e).lower():
                 print("Ta piosenka już jest zatrzymana.")
-                # await play_voice(SONG_ALREADY_STOPPED_VOICE_LOCATION)
             else:
                 print("Nie udało się zatrzymać piosenki.\nPowód:", e)
         else:
-            await play_voice(STOPPED_SONG_VOICE_LOCATION)
+            play_voice(STOPPED_SONG_VOICE_LOCATION)
             print("Zatrzymano oddtwarzanie piosenki.")
 
     async def resume_song(self):

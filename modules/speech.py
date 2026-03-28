@@ -1,12 +1,11 @@
 import pyaudio
-import asyncio
+import anyio
 import subprocess
 import speech_recognition as sr
 from typing import Optional
 import wave
 import numpy as np
 from scipy.signal import resample_poly
-import math
 import pvporcupine
 from regex import findall
 from google.cloud import texttospeech
@@ -51,14 +50,14 @@ async def text_to_speech(text_to_tell: str, tts_loc: str = TTS_FILE_LOCATION):
     )
 
     # Zapisz do pliku
-    with open(tts_loc, "wb") as out:
-        out.write(response.audio_content)
+    async with await anyio.open_file(tts_loc, "wb") as out:
+        await out.write(response.audio_content)
 
     print(f"Zapisano dźwięk do {tts_loc}")
-    await play_voice(tts_loc)
+    play_voice(tts_loc)
 
 
-async def speech_to_text() -> Optional[str | None]:
+def speech_to_text() -> Optional[str | None]:
     recognizer = sr.Recognizer()
     with sr.AudioFile(WAVE_OUTPUT_FILENAME) as source:
         audio = recognizer.record(source)
@@ -74,11 +73,10 @@ async def speech_to_text() -> Optional[str | None]:
         return None
 
 
-async def listen_for_keyword(pa, respeaker_index, porcupine) -> bool:
-    stream = None
-
-    valid_sample_rates = []
+def get_supported_sample_rate(pa, respeaker_index: int) -> int:
+    """Sprawdza i zwraca optymalną częstotliwość próbkowania dla mikrofonu."""
     test_sample_rates = [8000, 16000, 22050, 32000, 44100, 48000, 96000]
+    valid_sample_rates = []
 
     for rate in test_sample_rates:
         try:
@@ -99,13 +97,33 @@ async def listen_for_keyword(pa, respeaker_index, porcupine) -> bool:
     if not valid_sample_rates:
         raise RuntimeError("No valid sample rates found for device")
 
-    # Prefer 16000 Hz, if not available - wybierz pierwszy obs?ugiwany rate
-    if 16000 in valid_sample_rates:
-        chosen_rate = 16000
-    else:
-        chosen_rate = valid_sample_rates[0]
+    return 16000 if 16000 in valid_sample_rates else valid_sample_rates[0]
 
-    print(f"[DEBUG] Opening stream with rate={chosen_rate}, channels=1, device={respeaker_index}")
+
+def read_and_process_audio(stream, chosen_rate: int, frame_length: int) -> tuple:
+    """Odczytuje dane ze strumienia i w razie potrzeby wykonuje resampling do 16000 Hz."""
+    if chosen_rate != 16000:
+        input_samples = int(frame_length * chosen_rate / 16000)
+        data = stream.read(input_samples, exception_on_overflow=False)
+        audio_data = np.frombuffer(data, dtype=np.int16)
+
+        audio_data = resample_poly(audio_data, 16000, chosen_rate)
+
+        if len(audio_data) > frame_length:
+            audio_data = audio_data[:frame_length]
+        elif len(audio_data) < frame_length:
+            audio_data = np.pad(audio_data, (0, frame_length - len(audio_data)))
+    else:
+        data = stream.read(frame_length, exception_on_overflow=False)
+        audio_data = np.frombuffer(data, dtype=np.int16)
+
+    return tuple(audio_data.astype(np.int16))
+
+
+def listen_for_keyword(pa, respeaker_index: int, porcupine) -> bool:
+    chosen_rate = get_supported_sample_rate(pa, respeaker_index)
+
+    print(f"Rozpoczynanie transmisji z parametrami:\nsample_rate={chosen_rate},\nchannels=1,\ndevice={respeaker_index}")
 
     try:
         stream = pa.open(
@@ -119,37 +137,12 @@ async def listen_for_keyword(pa, respeaker_index, porcupine) -> bool:
     except Exception as e:
         print(str(e))
         raise e
-    else:
-        print("Started a stream.")
 
     print("Nasluchiwanie slowa kluczowego...")
 
     try:
         while True:
-            if chosen_rate != 16000:
-                # calculate how many input samples to read
-                input_samples = int(porcupine.frame_length * chosen_rate / 16000)
-
-                # read input_samples from stream
-                data = stream.read(input_samples, exception_on_overflow=False)
-                audio_data = np.frombuffer(data, dtype=np.int16)
-
-                # resample to 16000 Hz
-                audio_data = resample_poly(audio_data, 16000, chosen_rate)
-
-                # now make sure it is exactly porcupine.frame_length
-                if len(audio_data) > porcupine.frame_length:
-                    audio_data = audio_data[:porcupine.frame_length]
-                elif len(audio_data) < porcupine.frame_length:
-                    # pad with zeros if needed (rare)
-                    audio_data = np.pad(audio_data, (0, porcupine.frame_length - len(audio_data)))
-            else:
-                # no resampling needed
-                data = stream.read(porcupine.frame_length, exception_on_overflow=False)
-                audio_data = np.frombuffer(data, dtype=np.int16)
-
-            pcm = tuple(audio_data.astype(np.int16))
-
+            pcm = read_and_process_audio(stream, chosen_rate, porcupine.frame_length)
             keyword_index = porcupine.process(pcm)
             if keyword_index >= 0:
                 print("Keyword detected!")
@@ -161,9 +154,7 @@ async def listen_for_keyword(pa, respeaker_index, porcupine) -> bool:
             stream.close()
 
 
-
-
-async def rec(p: pyaudio.PyAudio, respeaker_index: int, chunk_size: int):
+def rec(p: pyaudio.PyAudio, respeaker_index: int, chunk_size: int):
     actual_chunk_size = chunk_size if chunk_size is not None else pvporcupine.Porcupine.frame_length
 
     # Sprawdz dostepne sample rates
@@ -237,13 +228,13 @@ async def rec(p: pyaudio.PyAudio, respeaker_index: int, chunk_size: int):
     wf.writeframes(audio_data.tobytes())
     wf.close()
 
-async def play_voice(file_location: str = WAVE_OUTPUT_FILENAME):
+def play_voice(file_location: str = WAVE_OUTPUT_FILENAME):
     wave_obj = sa.WaveObject.from_wave_file(file_location)
     play_obj = wave_obj.play()
     play_obj.wait_done()
 
 
-async def get_respeaker_index():
+def get_respeaker_index():
     try:
         arecord_output: str = str(subprocess.run(
             ["arecord", "-l"],
@@ -255,4 +246,4 @@ async def get_respeaker_index():
         print(f"Respeaker index: {respeaker_index}")
         return respeaker_index
     except Exception as e:
-        raise Exception(f"Couldn't get the respreaker index. {e}")
+        raise RuntimeError(f"Couldn't get the respeaker index: {e}") from e
