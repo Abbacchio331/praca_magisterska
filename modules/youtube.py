@@ -164,7 +164,6 @@ class YouTubeSession:
             else:
                 print("Nie udało się zatrzymać piosenki.\nPowód:", e)
         else:
-            play_voice(STOPPED_SONG_VOICE_LOCATION)
             print("Zatrzymano oddtwarzanie piosenki.")
 
     async def resume_song(self):
