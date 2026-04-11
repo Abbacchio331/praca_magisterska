@@ -4,6 +4,8 @@ import datetime
 import json
 from regex import findall
 from modules.speech import play_voice, text_to_speech
+from modules.ai_tools import ask_gemini
+from modules.large_variables import weather_answer_formatting_prompt
 
 SOUNDS_PATH: str = "assets/sounds/"
 PROCESSING_ERROR_VOICE_LOCATION: str = SOUNDS_PATH + "processing_error.wav"
@@ -39,7 +41,7 @@ def pl_weather(temp, kind: Kind | None = None) -> str:
     return f"{temp} stopni Celsjusza. {en_to_pl_weather_kind(kind)}" \
         if kind else f"{temp} stopni Celsjusza"
 
-async def get_weather(city: str, date: str) -> str | None:
+async def get_weather(user_question: str, city: str, date: str) -> str | None:
     date: datetime.date | None = validate_date(date)
     if date is None:
         print("Incorrect date format")
@@ -49,7 +51,8 @@ async def get_weather(city: str, date: str) -> str | None:
             weather: python_weather.Forecast = await client.get(city)
             for daily_forecast in weather:
                 if daily_forecast.date == date:
-                    return pl_weather(daily_forecast.temperature) if date != datetime.date.today() else pl_weather(weather.temperature, weather.kind)
+                    weather_info: str = pl_weather(daily_forecast.temperature) if date != datetime.date.today() else pl_weather(weather.temperature, weather.kind)
+                    return ask_gemini(weather_answer_formatting_prompt.format(user_question, weather_info), tool_selection = False)
             print("Date not found")
             return None
     except python_weather.errors.RequestError as error:
@@ -62,25 +65,26 @@ def parse_ai_weather_response(ai_string: str) -> tuple:
         parsed_dict = json.loads(ai_string)
         city = parsed_dict.get("city")
         date = parsed_dict.get("date")
+        question = parsed_dict.get("question")
 
         if not city or not date:
             print("AI zapomniało podać miasto!")
-            return None, None
+            return None, None, None
 
-        return city, date
+        return city, date, question
 
     except json.JSONDecodeError as e:
         print(f"AI wygenerowało uszkodzony JSON. Szczegóły: {e}")
         print(f"Otrzymany tekst: {ai_string}")
-        return None, None
+        return None, None, None
 
 
 async def say_weather(content: str):
-    city, date = parse_ai_weather_response(content)
+    city, date, user_question = parse_ai_weather_response(content)
     if not city or not date:
         play_voice(PROCESSING_ERROR_VOICE_LOCATION)
     else:
-        weather: str = await get_weather(city, date)
+        weather: str = await get_weather(user_question, city, date)
         if weather is not None:
             await text_to_speech(weather)
         else:

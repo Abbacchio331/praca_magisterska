@@ -1,6 +1,30 @@
 import datetime
+import geocoder
+
+def get_current_city() -> str:
+    fallback: str = "Kraków"
+    try:
+        g = geocoder.ip('me')
+        if g.city:
+            return g.city
+        return fallback
+    except Exception as e:
+        print(f"Nie udało się uzyskać obecnej lokalizacji. Błąd: {e}")
+        return fallback
 
 today: str = str(datetime.date.today())
+default_location: str = get_current_city()
+
+weather_answer_formatting_prompt: str = """Jesteś pomocnym asystentem, który odpowiada na pytania użytkownika na podstawie surowych danych pogodowych.
+
+Pytanie użytkownika: "{0}"
+Dane pogodowe: "{1}"
+
+Instrukcje:
+1. Odpowiedz bezpośrednio na pytanie. Jeśli pytanie jest zamknięte (np. "Czy wziąć parasol?", "Czy ubrać kurtkę?"), ZAWSZE zacznij odpowiedź od "Tak" lub "Nie".
+2. Po udzieleniu bezpośredniej odpowiedzi, dodaj krótkie uzasadnienie wynikające TYLKO z podanych danych pogodowych (np. "Tak, warto wziąć parasol, ponieważ spodziewana jest mżawka, a temperatura wynosi 4°C.").
+3. Bądź zwięzły, naturalny i nie dodawaj informacji, których nie ma w danych pogodowych.
+Odpowiedź:"""
 
 CORE_PROMPT: str = """
 Jesteś inteligentnym asystentem stworzonym do przetwarzania próśb użytkownika i odpowiadania na nie w sposób ustrukturyzowany.
@@ -45,9 +69,10 @@ WEATHER_PROMPT: str = f"""
 4. **tool: 'WEATHER'**
 * Użyj go, kiedy użytkownik zada ci pytanie dotyczące pogody w danym mieście.
 * 'content' powinien być słownikiem z następującymi kluczami:
-    - 'city': neutralna forma miasta (np. gdy użytkownik pyta jaka jest pogoda w Krakowie, to 'city' = 'Kraków", domyślnie 'city' = 'Kraków")
+    - 'city': neutralna forma miasta (np. gdy użytkownik pyta jaka jest pogoda w Krakowie, to 'city' = 'Kraków", domyślnie 'city' = '{default_location}')
     - 'date': żądana data w formacie YYYY-MM-DD, dzisiejsza data to domyślna wartość: {today}
-* Przykład: Użytkownik: "Jaka jest pogoda w Nowym Jorku?" -> {{"tool": "WEATHER", "content": {{"city": "New York", "date": "{today}"}}}}
+    - 'question': oryginalne, dokładne pytanie zadane przez użytkownika.
+* Przykład: Użytkownik: "Jaka jest pogoda w Nowym Jorku?" -> {{"tool": "WEATHER", "content": {{"city": "New York", "date": "{today}", "question": "Jaka jest pogoda w Nowym Jorku?"}}}}
 """
 REBOOT_PROMPT: str = """
 5. **tool: 'REBOOT'**
@@ -65,7 +90,7 @@ POWEROFF_PROMPT: str = """
 NAMED_PROMPTS = {
     "PLAY": PLAY_PROMPT,
     "RESUME": RESUME_PROMPT,
-    "PAUSE": PAUSE_PROMPT,
+    #  "PAUSE": PAUSE_PROMPT,
     "ANSWER": ANSWER_PROMPT,
     "WEATHER": WEATHER_PROMPT,
     "REBOOT": REBOOT_PROMPT,
