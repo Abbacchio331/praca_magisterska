@@ -1,8 +1,11 @@
 import pyaudio
+import os
+import json
 import anyio
 import subprocess
 import speech_recognition as sr
 from typing import Optional
+from datetime import date
 import wave
 import numpy as np
 from scipy.signal import resample_poly
@@ -17,14 +20,61 @@ load_dotenv()
 RESPEAKER_RATE = 44100
 RESPEAKER_CHANNELS = 2 
 RESPEAKER_WIDTH = 2
-# run getDeviceInfo.py to get index
 CHUNK = 1024
 RECORD_SECONDS = 5
+DAILY_CHAR_LIMIT = 30000
 WAVE_OUTPUT_FILENAME = "outputs/output.wav"
 TTS_FILE_LOCATION = "outputs/tts.wav"
+SOUNDS_PATH: str = "assets/sounds/"
+STATE_FILE = "assets/tts_usage_state.json"
+EXCEEDED_TTS_RATE_LIMIT_VOICE_LOCATION: str = SOUNDS_PATH + "exceeded_tts_rate_limit.wav"
+
+
+def exceeded_tts_rate_limit(text_to_tell: str) -> bool:
+    """
+    Sprawdza, czy dodanie nowego tekstu przekroczy dzienny limit znaków TTS.
+    Zapisuje stan do pliku, aby pamiętać zużycie pomiędzy restartami programu.
+    """
+    current_date = str(date.today())
+    text_length = len(text_to_tell)
+
+    # Wczytywanie obecnego stan z pliku (jeśli istnieje)
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            try:
+                state = json.loads(f.read())
+            except json.JSONDecodeError:
+                state = {"date": current_date, "used_chars": 0}
+    else:
+        state = {"date": current_date, "used_chars": 0}
+
+    # Resetowanie limitu, jeśli zmienił się dzień
+    if state.get("date") != current_date:
+        state["date"] = current_date
+        state["used_chars"] = 0
+
+    # Sprawdzanie, czy nowy tekst przekracza limit
+    if state["used_chars"] + text_length > DAILY_CHAR_LIMIT:
+        print(
+            f"Błąd: Przekroczono limit TTS. Użyto {state['used_chars']}/{DAILY_CHAR_LIMIT}. "
+            f"Próba dodania {text_length} znaków zakończyła się niepowodzeniem."
+        )
+        return True
+
+    # Jeśli limit nie został przekroczony następuje zaaktualizowanie zużycia i zapis do pliku
+    state["used_chars"] += text_length
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        f.write(json.dumps(state))
+
+    print(f"Zużycie TTS: {state['used_chars']}/{DAILY_CHAR_LIMIT} znaków dzisiaj.")
+    return False
 
 
 async def text_to_speech(text_to_tell: str, tts_loc: str = TTS_FILE_LOCATION):
+    if exceeded_tts_rate_limit(text_to_tell):
+        play_voice(EXCEEDED_TTS_RATE_LIMIT_VOICE_LOCATION)
+        return
+
     # Inicjalizacja klienta
     client = texttospeech.TextToSpeechClient()
 
