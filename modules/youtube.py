@@ -79,7 +79,7 @@ class YouTubeSession:
             await self.page.locator('#contents > ytmusic-shelf-renderer:nth-child(3) #play-button').first.click()
             title_search = findall(r'(?i)ytmusic-shelf-renderer"[^>]*?>\s*songs\s*<.*?title="\s*([^"]*?)\s*"', found_page_html, DOTALL)
 
-        if title_search is not None:
+        if title_search:
             title = title_search[0]
         else:
             print("Nie znaleziono piosenki")

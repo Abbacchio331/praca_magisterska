@@ -33,7 +33,7 @@ def ask_gemini(question: str, tool_selection: bool = True) -> Union[GeminiAnswer
             thinking_config=ThinkingConfig(thinking_budget=0)  # type: ignore
         )
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3.1-flash-lite-preview",
             contents=question,
             config=config,
         )
