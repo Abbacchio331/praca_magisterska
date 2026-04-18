@@ -1,1 +1,6 @@
 .env
+modules/__pycache__/
+.idea/
+output.wav
+vosk-model-small-pl-0.22.zip
+model/

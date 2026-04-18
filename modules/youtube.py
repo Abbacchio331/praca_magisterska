@@ -71,34 +71,44 @@ class YouTubeSession:
             play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
             return
 
+        play_button_locator = None
         title_search: list | None = None
-        if findall(r'(?i)\b(play)\b', page_type_search[0]):
-            await self.page.locator('#actions > yt-button-renderer:nth-child(1) > yt-button-shape > button').first.click()
-            title_search = findall(r'class="title style-scope ytmusic-card-shelf-renderer"(?:[^>]*?>){2}\s*([^<]*?)\s*<', found_page_html, DOTALL)
-        elif findall(r'(?i)\b(songs|undercards)\b', page_type_search[0]):
-            await self.page.locator('#contents > ytmusic-shelf-renderer:nth-child(3) #play-button').first.click()
-            title_search = findall(r'(?i)ytmusic-shelf-renderer"[^>]*?>\s*songs\s*<.*?title="\s*([^"]*?)\s*"', found_page_html, DOTALL)
 
-        if title_search:
-            title = title_search[0]
-        else:
-            print("Nie znaleziono piosenki")
+        if findall(r'(?i)\b(play)\b', page_type_search[0]):
+            play_button_locator = self.page.locator(
+                '#actions > yt-button-renderer:nth-child(1) > yt-button-shape > button').first
+            title_search = findall(
+                r'class="title style-scope ytmusic-card-shelf-renderer"(?:[^>]*?>){2}\s*([^<]*?)\s*<',
+                found_page_html, DOTALL)
+
+        elif findall(r'(?i)\b(songs|undercards)\b', page_type_search[0]):
+            play_button_locator = self.page.locator(
+                '#contents > ytmusic-shelf-renderer:nth-child(3) #play-button').first
+            title_search = findall(r'(?i)ytmusic-shelf-renderer"[^>]*?>\s*songs\s*<.*?title="\s*([^"]*?)\s*"',
+                                   found_page_html, DOTALL)
+
+        if not play_button_locator:
+            print("Nie znaleziono przycisku odtwarzania.")
             play_voice(SONG_NOT_FOUND_ERROR)
             return
 
-        print(f"Uruchamiam '{title}'...")
-        await self.monitor_ad_status(title)
+        if title_search:
+            found_title = title_search[0]
+        else:
+            found_title = title
 
-        # Disable autoplay if enabled
+        await play_button_locator.click()
+        print(f"Uruchamiam '{found_title}'...")
+
+        await self.monitor_ad_status(found_title)
+
+        # Wyłączenie funkcji autoplay jeżeli była włączona
         if findall(r'id="automix"', found_page_html):
             if findall(r'id="automix"[^>]*?aria-pressed="true"', found_page_html):
                 await self.page.locator('#automix').first.click()
-                print("Wyłączono automatyczne oddtwarzanie.")
+                print("Wyłączono automatyczne odtwarzanie.")
             elif findall(r'id="automix"[^>]*?aria-pressed="false"', found_page_html):
-                print("Automatyczne oddtwarzanie zostało uprzednio wyłączone.")
-
-        # Start monitoring ads
-        return True, found_page_html
+                print("Automatyczne odtwarzanie zostało uprzednio wyłączone.")
 
     @staticmethod
     def _extract_title(html: str) -> str:
