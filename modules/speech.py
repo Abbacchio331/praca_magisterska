@@ -61,7 +61,7 @@ def exceeded_tts_rate_limit(text_to_tell: str) -> bool:
         )
         return True
 
-    # Jeśli limit nie został przekroczony następuje zaaktualizowanie zużycia i zapis do pliku
+    # Jeśli limit nie został przekroczony następuje zaktualizowanie zużycia i zapis do pliku
     state["used_chars"] += text_length
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         f.write(json.dumps(state))
