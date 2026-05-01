@@ -26,7 +26,7 @@ HELP_VOICE_LOCATION: str = SOUNDS_PATH + "help.wav"
 LISTENING_START_VOICE_LOCATION: str = SOUNDS_PATH + "listening_start.wav"
 LOST_NETWORK_VOICE_LOCATION: str = SOUNDS_PATH + "lost_network.wav"
 RETRY_LIMIT: int = 2  # Ile razy prosić o powtórzenie, gdy nie zrozumiano polecenia
-WIFI_CONFIG_PATH: str = "/media/dawid/RPI config/config.txt"
+WIFI_CONFIG_PATH: str = "/media/rpi_user/RPi config/config.txt"
 
 
 async def handle_gemini_answer(yt: YouTubeSession, tool: str, content: str):
