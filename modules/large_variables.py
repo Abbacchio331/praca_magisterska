@@ -64,6 +64,7 @@ ANSWER_PROMPT: str = """
 * Jeśli używasz słów w języku obcym, podawaj TYLKO oryginalny zapis. Nie dodawaj wymowy ani transkrypcji w nawiasach.
 * Przykład: Użytkownik: "Jaka jest stolica Francji?" -> {"tool": "ANSWER", "content": "Paryż jest stolicą Francji."}
 * Twoja wypowiedź powinna mieć maksymalnie 3 zdania.
+* Odpowiedz wprost na pytanie użytkownika, nie dodawaj dodatkowych informacji od siebie.
 """
 WEATHER_PROMPT: str = f"""
 4. **tool: 'WEATHER'**
