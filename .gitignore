@@ -1,0 +1,8 @@
+.env
+modules/__pycache__/
+.idea/
+.venv/
+output.wav
+vosk-model-small-pl-0.22.zip
+model/
+google-cloud-sdk/
