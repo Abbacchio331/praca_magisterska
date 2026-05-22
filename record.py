@@ -1,8 +1,8 @@
 import asyncio
 from modules.speech import text_to_speech
 
-content: str = "Mogę odtworzyć piosenkę z YouTube Music, wznowić jej odtwarzanie, odpowiedzieć na Twoje pytania, podać Ci dane pogodowe oraz zrestartować i wyłączyć urządzenie. Jeśli chcesz zatrzymać odtwarzanie piosenki, po prostu zapytaj mnie o cokolwiek, a piosenka zostanie zatrzymana."
-loc: str = "assets/sounds/help.wav"
+content: str = "Cześć. Możesz mnie zawołać mówiąc. Hej nowa. Jeśli mnie o to poprosisz dam ci znać jakie mam funkcje."
+loc: str = "assets/sounds/setup.wav"
 
 async def main():
     await text_to_speech(content, loc)

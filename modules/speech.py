@@ -2,15 +2,13 @@ import pyaudio
 import os
 import json
 import anyio
-import subprocess
+import pyaudio
 import speech_recognition as sr
 from typing import Optional
 from datetime import date
 import wave
 import numpy as np
 from scipy.signal import resample_poly
-import pvporcupine
-from regex import findall
 from google.cloud import texttospeech
 from dotenv import load_dotenv
 
@@ -144,7 +142,7 @@ def get_supported_sample_rate(pa, respeaker_index: int) -> int:
     return 16000 if 16000 in valid_sample_rates else valid_sample_rates[0]
 
 
-def read_and_process_audio(stream, chosen_rate: int, frame_length: int) -> tuple:
+def read_and_process_audio(stream, chosen_rate: int, frame_length: int) -> np.ndarray:
     """Odczytuje dane ze strumienia i w razie potrzeby wykonuje resampling do 16000 Hz."""
     if chosen_rate != 16000:
         input_samples = int(frame_length * chosen_rate / 16000)
@@ -161,10 +159,11 @@ def read_and_process_audio(stream, chosen_rate: int, frame_length: int) -> tuple
         data = stream.read(frame_length, exception_on_overflow=False)
         audio_data = np.frombuffer(data, dtype=np.int16)
 
-    return tuple(audio_data.astype(np.int16))
+    return audio_data.astype(np.int16)
 
 
-def listen_for_keyword(pa, respeaker_index: int, porcupine) -> bool:
+def listen_for_keyword(pa, respeaker_index: int, oww_model) -> bool:
+    chunk_size: int = 1280
     chosen_rate = get_supported_sample_rate(pa, respeaker_index)
 
     print(f"Rozpoczynanie transmisji z parametrami:\nczęstotliwość próbkowania = {chosen_rate},\nkanały = 1,\nurządzenie = {respeaker_index}")
@@ -176,7 +175,7 @@ def listen_for_keyword(pa, respeaker_index: int, porcupine) -> bool:
             format=pyaudio.paInt16,
             input=True,
             input_device_index=respeaker_index,
-            frames_per_buffer=porcupine.frame_length
+            frames_per_buffer=chunk_size
         )
     except Exception as e:
         print(str(e))
@@ -186,20 +185,19 @@ def listen_for_keyword(pa, respeaker_index: int, porcupine) -> bool:
 
     try:
         while True:
-            pcm = read_and_process_audio(stream, chosen_rate, porcupine.frame_length)
-            keyword_index = porcupine.process(pcm)
-            if keyword_index >= 0:
-                print("Wykryto słowo kluczowe!")
-                return True
-
+            pcm = read_and_process_audio(stream, chosen_rate, chunk_size)
+            prediction = oww_model.predict(pcm)
+            for model_name, score in prediction.items():
+                if score > 0.9:
+                    print(f"Wykryto słowo kluczowe! (pewność: {score:.2f})")
+                    return True
     finally:
         if stream is not None:
             stream.stop_stream()
             stream.close()
 
 
-def rec(p: pyaudio.PyAudio, respeaker_index: int, chunk_size: int):
-    actual_chunk_size = chunk_size if chunk_size is not None else pvporcupine.Porcupine.frame_length
+def rec(p: pyaudio.PyAudio, respeaker_index: int):
 
     valid_sample_rates = []
     test_sample_rates = [8000, 16000, 22050, 32000, 44100, 48000, 96000]
@@ -237,7 +235,7 @@ def rec(p: pyaudio.PyAudio, respeaker_index: int, chunk_size: int):
         channels=RESPEAKER_CHANNELS,
         input=True,
         input_device_index=respeaker_index,
-        frames_per_buffer=actual_chunk_size
+        frames_per_buffer=1280
     )
 
     print("Nagrywanie...")
@@ -271,8 +269,6 @@ def rec(p: pyaudio.PyAudio, respeaker_index: int, chunk_size: int):
 def play_voice(file_location: str = WAVE_OUTPUT_FILENAME):
     os.system(f"aplay -D plughw:2,0 {file_location} > /dev/null 2>&1")
 
-
-import pyaudio
 
 def get_respeaker_index(pa):
     """

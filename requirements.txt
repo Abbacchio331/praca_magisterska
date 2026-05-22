@@ -51,6 +51,7 @@ multidict
 numpy
 oauthlib
 olefile
+openwakeword
 pexpect
 pgzero
 picamera2

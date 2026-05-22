@@ -97,8 +97,14 @@ class YouTubeSession:
         else:
             found_title = title
 
-        await play_button_locator.click()
-        print(f"Uruchamiam '{found_title}'...")
+        try:
+            await play_button_locator.click(timeout=5000)
+            print(f"Uruchamiam '{found_title}'...")
+        except Exception as e:
+            print(f"Błąd: Przycisk odtwarzania (lokator: {play_button_locator}) jest niedostępny na stronie.")
+            print(f"Szczegóły błędu: {e}")
+            play_voice(SONG_NOT_FOUND_ERROR)
+            return
 
         await self.monitor_ad_status(found_title)
 

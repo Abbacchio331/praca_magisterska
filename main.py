@@ -1,9 +1,9 @@
 import asyncio
 import pyaudio
-import pvporcupine
 import subprocess
 from modules.ai_tools import ask_gemini, GeminiAnswer
 from modules.youtube import YouTubeSession
+from openwakeword import Model
 from modules.weather import say_weather
 from modules.speech import setup_dynamic_audio, get_respeaker_index, rec, speech_to_text, listen_for_keyword, play_voice, text_to_speech
 from modules.large_variables import NAMED_PROMPTS
@@ -55,19 +55,16 @@ async def handle_gemini_answer(yt: YouTubeSession, tool: str, content: str):
 
 async def interactive_console(pa: pyaudio.PyAudio, respeaker_index: int, yt: YouTubeSession):
     try:
-        porcupine = pvporcupine.create(
-            access_key=os.environ.get("PORCUPINE_KEY"),
-            keyword_paths=['assets/Hey-Raspberry_en_raspberry-pi_v4_0_0.ppn'],
-        )
+        oww_model = Model(wakeword_model_paths=["assets/Hey_Nova_20260510_205443.onnx"])
     except Exception as e:
-        print(f"Problem z porcupine: {e}")
+        print(f"Problem z openwakeword: {e}")
         return
 
     print("Stworzono instancję audio.")
 
     try:
         while True:
-            if listen_for_keyword(pa, respeaker_index, porcupine):
+            if listen_for_keyword(pa, respeaker_index, oww_model):
 
                 if not check_network_connection():
                     play_voice(LOST_NETWORK_VOICE_LOCATION)
@@ -75,20 +72,19 @@ async def interactive_console(pa: pyaudio.PyAudio, respeaker_index: int, yt: You
 
                 await yt.stop_song()
                 play_voice(LISTENING_START_VOICE_LOCATION)
-                await handle_interaction(pa, respeaker_index, porcupine.frame_length, yt)
+                await handle_interaction(pa, respeaker_index, yt)
 
     finally:
-        porcupine.delete()
         pa.terminate()
         print("Zamknięto instancję audio.")
 
 
-async def handle_interaction(pa, respeaker_index: int, frame_length: int, yt: YouTubeSession):
+async def handle_interaction(pa, respeaker_index: int, yt: YouTubeSession):
     """Obsługuje logikę nasłuchiwania i wysyłania komend do Gemini po wybudzeniu."""
     retry_count = 0
 
     while True:
-        rec(pa, respeaker_index, frame_length)
+        rec(pa, respeaker_index)
         user_input = speech_to_text()
         print(f"Rozpoznany tekst: {user_input}")
         success = False
