@@ -3,6 +3,8 @@ from playwright.async_api import async_playwright, Page, Browser, BrowserContext
 from modules.speech import play_voice
 from regex import findall, DOTALL
 import asyncio
+import time
+import anyio
 
 SOUNDS_PATH: str = "assets/sounds/"
 OPEN_BROWSER_ERROR_VOICE_LOCATION: str = SOUNDS_PATH + "open_browser_error.wav"
@@ -65,7 +67,7 @@ class YouTubeSession:
         await self.page.wait_for_load_state("networkidle", timeout=wait_time * 1000)
         found_page_html = await self.page.content()
         print(f"Szukanie '{title}' zakończone.")
-
+        await asyncio.sleep(1)
         page_type_search: list = findall(r'(?i)(yt-core-attributed-string--white-space-no-wrap"[^>]*?>\s*Play\s*<|ytmusic-shelf-renderer"[^>]*?>\s*songs\s*<|id="undercards")', found_page_html)
         if not page_type_search or not findall(r'(?i)\b(play|songs|undercards)\b', page_type_search[0]):
             play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
@@ -82,8 +84,11 @@ class YouTubeSession:
                 found_page_html, DOTALL)
 
         elif findall(r'(?i)\b(songs|undercards)\b', page_type_search[0]):
-            play_button_locator = self.page.locator(
-                '#contents > ytmusic-shelf-renderer:nth-child(3) #play-button').first
+            if "ytmusic-shelf-renderer" in found_page_html:
+                play_button_locator = self.page.locator('#contents > ytmusic-shelf-renderer:nth-child(3) #play-button').first
+            else:
+                play_button_locator = self.page.locator('#contents.ytmusic-section-list-renderer > ytmusic-item-section-renderer:nth-child(3) #play-button').first
+
             title_search = findall(r'(?i)ytmusic-shelf-renderer"[^>]*?>\s*songs\s*<.*?title="\s*([^"]*?)\s*"',
                                    found_page_html, DOTALL)
 
@@ -106,7 +111,7 @@ class YouTubeSession:
             play_voice(SONG_NOT_FOUND_ERROR)
             return
 
-        await self.monitor_ad_status(found_title)
+        await self.monitor_ad_status()
 
         # Wyłączenie funkcji autoplay jeżeli była włączona
         if findall(r'id="automix"', found_page_html):
@@ -147,15 +152,31 @@ class YouTubeSession:
             if "timeout" not in str(e).lower():
                 print("Nie udało się odciszyć piosenki.\nPowód:", e)
 
-    async def monitor_ad_status(self, title: str):
+
+    async def is_ad_playing(self) -> bool:
+        await asyncio.sleep(2)
+        html = await self.page.content()
+        if 'title="Video will play after ad"' in html:
+            return True
+        return False
+
+
+    async def monitor_ad_status(self):
         print("Rozpoczęto monitorowanie reklam...")
+
+        start_time: float = time.time()
 
         while True:
             try:
-                html = await self.page.content()
-                current_title = self._extract_title(html)
+                if time.time() - start_time > 60.0:
+                    print(f"Limit czasu (60s) minął. Przerywam monitorowanie reklam.")
+                    await self._unmute_song()
+                    break
 
-                is_ad = current_title != title
+                await asyncio.sleep(2)
+                html = await self.page.content()
+
+                is_ad = await self.is_ad_playing()
 
                 if is_ad:
                     await self._mute_ad()
@@ -163,11 +184,12 @@ class YouTubeSession:
                     await asyncio.sleep(2)
                 else:
                     await self._unmute_song()
-                    print("Rozpoczęto oddtwarzanie!")
+                    print("Rozpoczęto odtwarzanie!")
                     break
 
             except Exception as e:
                 print("Błąd w monitorowaniu:", e)
+                await self._unmute_song()
                 break
 
 

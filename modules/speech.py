@@ -182,13 +182,16 @@ def listen_for_keyword(pa, respeaker_index: int, oww_model) -> bool:
         raise e
 
     print("Nasluchiwanie slowa kluczowego...")
-
+    oww_model.reset()
     try:
         while True:
             pcm = read_and_process_audio(stream, chosen_rate, chunk_size)
+
+            pcm = (pcm - np.mean(pcm)).astype(np.int16)
+
             prediction = oww_model.predict(pcm)
             for model_name, score in prediction.items():
-                if score > 0.9:
+                if score > 0.7:
                     print(f"Wykryto słowo kluczowe! (pewność: {score:.2f})")
                     return True
     finally:

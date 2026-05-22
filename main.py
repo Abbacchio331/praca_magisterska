@@ -55,7 +55,7 @@ async def handle_gemini_answer(yt: YouTubeSession, tool: str, content: str):
 
 async def interactive_console(pa: pyaudio.PyAudio, respeaker_index: int, yt: YouTubeSession):
     try:
-        oww_model = Model(wakeword_model_paths=["assets/Hey_Nova_20260510_205443.onnx"])
+        oww_model = Model(wakeword_model_paths=["assets/Hey_Nova_20260328_194345.onnx"])
     except Exception as e:
         print(f"Problem z openwakeword: {e}")
         return
@@ -154,6 +154,27 @@ def connect_with_wifi() -> bool:
             timeout=10
         )
 
+        if result.returncode == 0:
+            time.sleep(2)
+            print("Połączono pomyślnie!")
+            return True
+        
+        print("Istniejący profil nie zadziałał. Usuwanie SSID...")
+        subprocess.run(
+            ["nmcli", "connection", "delete", "id", ssid],
+            capture_output=True,
+            text=True
+        )
+        subprocess.run(["nmcli", "device", "wifi", "rescan"], capture_output=True)
+        time.sleep(2)
+
+        result = subprocess.run(
+            ["nmcli", "device", "wifi", "connect", ssid, "password", password],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
         if result.returncode == 0:
             time.sleep(2)
             print("Połączono pomyślnie!")
