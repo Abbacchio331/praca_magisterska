@@ -67,7 +67,7 @@ class YouTubeSession:
         found_page_html = await self.page.content()
         print(f"Szukanie '{title}' zakończone.")
         await asyncio.sleep(1)
-        page_type_search: list = findall(r'(?i)(yt-core-attributed-string--white-space-no-wrap"[^>]*?>\s*Play\s*<|ytmusic-shelf-renderer"[^>]*?>\s*songs\s*<|id="undercards")', found_page_html)
+        page_type_search: list = findall(r'(?i)(yt-core-attributed-string--white-space-no-wrap"[^>]*?>\s*Play\s*<|ytmusic-(?:shelf-renderer|item-section-renderer)"[^>]*?>\s*songs\s*<|id="undercards")', found_page_html)
         if not page_type_search or not findall(r'(?i)\b(play|songs|undercards)\b', page_type_search[0]):
             play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
             return
@@ -79,7 +79,7 @@ class YouTubeSession:
             play_button_locator = self.page.locator(
                 '#actions > yt-button-renderer:nth-child(1) > yt-button-shape > button').first
             title_search = findall(
-                r'class="title style-scope ytmusic-card-shelf-renderer"(?:[^>]*?>){2}\s*([^<]*?)\s*<',
+                r'class="title style-scope ytmusic-card-(?:shelf-renderer|item-section-renderer)"(?:[^>]*?>){2}\s*([^<]*?)\s*<',
                 found_page_html, DOTALL)
 
         elif findall(r'(?i)\b(songs|undercards)\b', page_type_search[0]):
@@ -88,7 +88,7 @@ class YouTubeSession:
             else:
                 play_button_locator = self.page.locator('#contents.ytmusic-section-list-renderer > ytmusic-item-section-renderer:nth-child(3) #play-button').first
 
-            title_search = findall(r'(?i)ytmusic-shelf-renderer"[^>]*?>\s*songs\s*<.*?title="\s*([^"]*?)\s*"',
+            title_search = findall(r'(?i)ytmusic-(?:shelf-renderer|item-section-renderer)"[^>]*?>\s*songs\s*<.*?title="\s*([^"]*?)\s*"',
                                    found_page_html, DOTALL)
 
         if not play_button_locator:
