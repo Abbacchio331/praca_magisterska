@@ -41,22 +41,38 @@ def pl_weather(temp, kind: Kind | None = None) -> str:
     return f"{temp} stopni Celsjusza. {en_to_pl_weather_kind(kind)}" \
         if kind else f"{temp} stopni Celsjusza"
 
+
 async def get_weather(user_question: str, city: str, date: str) -> str | None:
-    date: datetime.date | None = validate_date(date)
-    if date is None:
+    date_obj: datetime.date | None = validate_date(date)
+    print(f"Moduł pogodowy został zapytany o miasto: {str(city)}")
+
+    if date_obj is None:
         print("Incorrect date format")
         return None
+
     try:
         async with python_weather.Client(unit=python_weather.METRIC) as client:
             weather: python_weather.Forecast = await client.get(city)
+
             for daily_forecast in weather:
-                if daily_forecast.date == date:
-                    weather_info: str = pl_weather(daily_forecast.temperature) if date != datetime.date.today() else pl_weather(weather.temperature, weather.kind)
-                    return ask_gemini(weather_answer_formatting_prompt.format(user_question, weather_info), tool_selection = False)
+                if daily_forecast.date == date_obj:
+                    weather_info: str = pl_weather(
+                        daily_forecast.temperature) if date_obj != datetime.date.today() else pl_weather(
+                        weather.temperature, weather.kind)
+                    return ask_gemini(weather_answer_formatting_prompt.format(user_question, weather_info),
+                                      tool_selection=False)
+
             print("Date not found")
             return None
+
     except python_weather.errors.RequestError as error:
-        print(str(error))
+        print(f"Błąd sieci/API pogodowego: {error}")
+        return None
+    except KeyError as error:
+        print(f"Błąd parsowania danych pogodowych przez bibliotekę (KeyError): {error}")
+        return None
+    except Exception as error:
+        print(f"Nieoczekiwany błąd w module pogodowym: {error}")
         return None
 
 

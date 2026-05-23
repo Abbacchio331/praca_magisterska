@@ -26,6 +26,13 @@ SOUNDS_PATH: str = "assets/sounds/"
 STATE_FILE = "assets/tts_usage_state.json"
 EXCEEDED_TTS_RATE_LIMIT_VOICE_LOCATION: str = SOUNDS_PATH + "exceeded_tts_rate_limit.wav"
 
+# Zmienne do sterowania zakańczania nagrywania głosu ciszą
+SILENCE_DURATION_SEC = 2.0  # ile sekund ciszy kończy nagrywanie
+SILENCE_THRESHOLD_RATIO = 0.20  # ...% najwyższej głośności to próg ciszy
+MIN_RECORD_SECONDS = 2.0  # nagrywaj zawsze przez co najmniej ... sekundy
+MAX_RECORD_SECONDS = 10.0  # nie nagrywaj dluzej niz ... sekund
+ABSOLUTE_MIN_VOLUME = 300  # minimalny próg głośności - ignoruje szum
+
 
 def exceeded_tts_rate_limit(text_to_tell: str) -> bool:
     """
@@ -201,36 +208,36 @@ def listen_for_keyword(pa, respeaker_index: int, oww_model) -> bool:
 
 
 def rec(p: pyaudio.PyAudio, respeaker_index: int):
-
     valid_sample_rates = []
     test_sample_rates = [8000, 16000, 22050, 32000, 44100, 48000, 96000]
 
     for rate in test_sample_rates:
         try:
             if p.is_format_supported(
-                rate,
-                input_device=respeaker_index,
-                input_channels=RESPEAKER_CHANNELS,
-                input_format=pyaudio.paInt16
+                    rate,
+                    input_device=respeaker_index,
+                    input_channels=RESPEAKER_CHANNELS,
+                    input_format=pyaudio.paInt16
             ):
                 valid_sample_rates.append(rate)
         except ValueError:
             pass
 
     info = p.get_device_info_by_index(respeaker_index)
-    print(f"Urządzenie {respeaker_index} - {info['name']}, maksymalne kanały wejścia: {info['maxInputChannels']}, maksymalne kanały wyjścia {info['maxOutputChannels']}")
+    print(
+        f"Urządzenie {respeaker_index} - {info['name']}, maksymalne kanały wejścia: {info['maxInputChannels']}, maksymalne kanały wyjścia {info['maxOutputChannels']}")
     print(f"Urządzenie wspiera następujące częstotliwości próbkowania: {valid_sample_rates}")
 
     if not valid_sample_rates:
         raise RuntimeError("Nie znaleziono żadnych częstotliwości próbkowania dla tego urządzenia.")
 
-    # Preferowany sample rate
     if 16000 in valid_sample_rates:
         chosen_rate = 16000
     else:
         chosen_rate = valid_sample_rates[0]
 
-    print(f"Otwierania stumienia z częstotliwością próbkowania: {chosen_rate}, kanały: {RESPEAKER_CHANNELS}, urządzenie: {respeaker_index}")
+    print(
+        f"Otwieranie strumienia z częstotliwością próbkowania: {chosen_rate}, kanały: {RESPEAKER_CHANNELS}, urządzenie: {respeaker_index}")
 
     stream = p.open(
         rate=chosen_rate,
@@ -245,10 +252,38 @@ def rec(p: pyaudio.PyAudio, respeaker_index: int):
 
     frames = []
 
+    # Zmienne do śledzenia głośności i czasu
+    max_volume_seen = ABSOLUTE_MIN_VOLUME
+    silent_chunks_count = 0
+
+    chunks_per_second = chosen_rate / 1280
+    max_silent_chunks = int(SILENCE_DURATION_SEC * chunks_per_second)
+    min_total_chunks = int(MIN_RECORD_SECONDS * chunks_per_second)
+    max_total_chunks = int(MAX_RECORD_SECONDS * chunks_per_second)
+
     try:
-        for _ in range(0, int(chosen_rate / CHUNK * RECORD_SECONDS)):
-            data = stream.read(CHUNK, exception_on_overflow=False)
+        for i in range(max_total_chunks):
+            data = stream.read(1280, exception_on_overflow=False)
             frames.append(data)
+
+            chunk_data = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+
+            current_volume = np.sqrt(np.mean(np.square(chunk_data)))
+
+            if current_volume > max_volume_seen:
+                max_volume_seen = current_volume
+
+            dynamic_threshold = max(ABSOLUTE_MIN_VOLUME, max_volume_seen * SILENCE_THRESHOLD_RATIO)
+
+            if current_volume < dynamic_threshold:
+                silent_chunks_count += 1
+            else:
+                silent_chunks_count = 0
+
+            if silent_chunks_count > max_silent_chunks and i > min_total_chunks:
+                print(f"Wykryto ciszę przez {SILENCE_DURATION_SEC}s. Przerywam nagrywanie.")
+                break
+
     finally:
         print("Koniec nagrywania.")
         stream.stop_stream()
@@ -257,16 +292,20 @@ def rec(p: pyaudio.PyAudio, respeaker_index: int):
     raw_data = b''.join(frames)
     audio_data = np.frombuffer(raw_data, dtype=np.int16)
 
+    audio_data = audio_data.reshape(-1, RESPEAKER_CHANNELS)
+
+    mono_audio = audio_data[:, 0]
+
     if chosen_rate != 16000:
         print(f"Zmiana częstotliwości z {chosen_rate} na 16000 Hz...")
-        audio_data = resample_poly(audio_data, 16000, chosen_rate)
-        audio_data = np.asarray(audio_data, dtype=np.int16)
+        mono_audio = resample_poly(mono_audio, 16000, chosen_rate)
+        mono_audio = np.asarray(mono_audio, dtype=np.int16)
 
     wf = wave.open(WAVE_OUTPUT_FILENAME, 'wb')
-    wf.setnchannels(RESPEAKER_CHANNELS)
+    wf.setnchannels(1)
     wf.setsampwidth(p.get_sample_size(p.get_format_from_width(RESPEAKER_WIDTH)))
     wf.setframerate(16000)
-    wf.writeframes(audio_data.tobytes())
+    wf.writeframes(mono_audio.tobytes())
     wf.close()
 
 def play_voice(file_location: str = WAVE_OUTPUT_FILENAME):

@@ -40,10 +40,14 @@ Oto narzędzia z których możesz korzystać:
 """
 PLAY_PROMPT: str = """
 1. **tool: 'PLAY'**
-* Użyj go kiedy użytkownik prosi o odtworzenie jakiejś piosenki.
-* 'content' zawsze powinien być tytułem piosenki o który prosi użytkownik.
-* Przykład: Użytkownik: "Odtwórz Bohemian Rhapsody" -> {"tool": "PLAY", "content": "Bohemian Rhapsody"}
-* Jeśli użytkownik nie sprecyzuje jakiej piosenki chce posłuchać wybierz dowolną.
+* OPIS: Użyj tego narzędzia zawsze, gdy użytkownik prosi o odtworzenie piosenki, muzyki lub utworu.
+* FORMAT: Zwróć obiekt JSON. Wartość 'content' musi zawierać "[Tytuł piosenki] - [Wykonawca]" (wykonawcę dodaj, jeśli to możliwe, aby zwiększyć precyzję).
+* ZASADA 1 (Korekta STT): Tekst od użytkownika pochodzi z systemu rozpoznawania mowy i może mieć błędy fonetyczne. Jeśli rozpoznasz zniekształcenie, popraw je na prawidłowy tytuł/wykonawcę (np. "baiting Above" -> "Biting Elbows").
+* ZASADA 2 (Brak halucynacji): Postaraj się poprawiać tylko literówki. Nigdy nie zmieniaj mało znanej piosenki o którą prosi użytkownik na najpopularniejszy utwór danego zespołu.
+* ZASADA 3 (Wartość domyślna): Jeśli użytkownik prosi o muzykę, ale nie podaje żadnych szczegółów (nie precyzuje utworu ani wykonawcy), ustaw 'content' na "Bohemian Rhapsody".
+* PRZYKŁAD POZYTYWNY 1 (Prosta prośba): Użytkownik: "Odtwórz Bohemian Rhapsody" -> {"tool": "PLAY", "content": "Bohemian Rhapsody"}
+* PRZYKŁAD POZYTYWNY 2 (Poprawa błędów STT): Użytkownik: "Odtwórz piosenkę zespołu baiting Above pod tytułem controlled" -> {"tool": "PLAY", "content": "Control - Biting Elbows"}
+* PRZYKŁAD NEGATYWNY (Złamanie ZASADY 2): Użytkownik: "Odtwórz piosenkę The neighborhood reflections" -> ŹLE: {"tool": "PLAY", "content": "Sweater Weather - The Neighbourhood"} (zmieniono utwór na popularniejszy).
 """
 RESUME_PROMPT: str = """
 2. **tool: 'RESUME'**

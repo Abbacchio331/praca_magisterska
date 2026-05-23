@@ -1,11 +1,13 @@
-from playwright.async_api import async_playwright, Page, Browser, BrowserContext
-
+from playwright.async_api import async_playwright, Page, Browser, BrowserContext, TimeoutError as PlaywrightTimeoutError
+from anyio import open_file
 from modules.speech import play_voice
 from regex import findall, DOTALL
 import asyncio
 import time
 
+DEBUGGING: bool = False
 SOUNDS_PATH: str = "assets/sounds/"
+BLANK_PAGE_VOICE_LOCATION: str = SOUNDS_PATH + "blank_page.wav"
 OPEN_BROWSER_ERROR_VOICE_LOCATION: str = SOUNDS_PATH + "open_browser_error.wav"
 SONG_NOT_FOUND_ERROR: str = SOUNDS_PATH + "song_not_found_error.wav"
 SONG_ALREADY_STOPPED_VOICE_LOCATION: str = SOUNDS_PATH + "song_already_stopped.wav"
@@ -47,7 +49,7 @@ class YouTubeSession:
     async def find_and_a_play_song(self, title: str, wait_time: int = 30):
         if self.page is None:
             print("Strona nie istnieje.")
-            play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
+            play_voice(BLANK_PAGE_VOICE_LOCATION)
             return
 
         print(f"Szukam '{title}'...")
@@ -60,6 +62,9 @@ class YouTubeSession:
         else:
             print("Nie znaleziono pola wpisywania.")
             play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
+            if DEBUGGING:
+                async with await open_file('html_test_1.txt', 'w+', encoding="utf-8") as f:
+                    await f.write(page_html)
             return
 
         await self.page.wait_for_timeout(wait_time * 50)
@@ -67,15 +72,18 @@ class YouTubeSession:
         found_page_html = await self.page.content()
         print(f"Szukanie '{title}' zakończone.")
         await asyncio.sleep(1)
-        page_type_search: list = findall(r'(?i)(yt-core-attributed-string--white-space-no-wrap"[^>]*?>\s*Play\s*<|ytmusic-(?:shelf-renderer|item-section-renderer)"[^>]*?>\s*songs\s*<|id="undercards")', found_page_html)
-        if not page_type_search or not findall(r'(?i)\b(play|songs|undercards)\b', page_type_search[0]):
+        page_type_search: list = findall(r'(?i)(ytAttributedStringHost ytAttributedStringWhiteSpaceNoWrap"[^>]*?>\s*(?:Play|Shuffle)\s*<|ytmusic-(?:shelf-renderer|item-section-renderer)"[^>]*?>\s*songs\s*<|id="undercards")', found_page_html)
+        if not page_type_search or not findall(r'(?i)\b(play|songs|undercards|shuffle)\b', page_type_search[0]):
             play_voice(OPEN_BROWSER_ERROR_VOICE_LOCATION)
+            if DEBUGGING:
+                async with await open_file('html_test_2.txt', 'w+', encoding="utf-8") as f:
+                    await f.write(found_page_html)
             return
 
         play_button_locator = None
         title_search: list | None = None
 
-        if findall(r'(?i)\b(play)\b', page_type_search[0]):
+        if findall(r'(?i)\b(play|shuffle)\b', page_type_search[0]):
             play_button_locator = self.page.locator(
                 '#actions > yt-button-renderer:nth-child(1) > yt-button-shape > button').first
             title_search = findall(
@@ -115,8 +123,11 @@ class YouTubeSession:
         # Wyłączenie funkcji autoplay jeżeli była włączona
         if findall(r'id="automix"', found_page_html):
             if findall(r'id="automix"[^>]*?aria-pressed="true"', found_page_html):
-                await self.page.locator('#automix').first.click()
-                print("Wyłączono automatyczne odtwarzanie.")
+                try:
+                    await self.page.locator('#automix').first.click(force=True, timeout=5000)
+                    print("Wyłączono automatyczne odtwarzanie.")
+                except PlaywrightTimeoutError:
+                    print("Błąd: Przycisk automix został znaleziony w HTML, ale nie można w niego kliknąć.")
             elif findall(r'id="automix"[^>]*?aria-pressed="false"', found_page_html):
                 print("Automatyczne odtwarzanie zostało uprzednio wyłączone.")
 
@@ -164,7 +175,7 @@ class YouTubeSession:
         print("Rozpoczęto monitorowanie reklam...")
 
         start_time: float = time.time()
-
+        await self._mute_ad()
         while True:
             try:
                 if time.time() - start_time > 60.0:

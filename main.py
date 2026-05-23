@@ -71,6 +71,7 @@ async def interactive_console(pa: pyaudio.PyAudio, respeaker_index: int, yt: You
                     break
 
                 await yt.stop_song()
+                await asyncio.sleep(1)
                 play_voice(LISTENING_START_VOICE_LOCATION)
                 await handle_interaction(pa, respeaker_index, yt)
 
