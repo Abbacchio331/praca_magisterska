@@ -4,7 +4,6 @@ from modules.speech import play_voice
 from regex import findall, DOTALL
 import asyncio
 import time
-import anyio
 
 SOUNDS_PATH: str = "assets/sounds/"
 OPEN_BROWSER_ERROR_VOICE_LOCATION: str = SOUNDS_PATH + "open_browser_error.wav"
