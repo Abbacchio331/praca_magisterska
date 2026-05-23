@@ -188,7 +188,7 @@ def listen_for_keyword(pa, respeaker_index: int, oww_model) -> bool:
         print(str(e))
         raise e
 
-    print("Nasluchiwanie slowa kluczowego...")
+    print("Nasłuchiwanie słowa wybudzającego...")
     oww_model.reset()
     try:
         while True:
