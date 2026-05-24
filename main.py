@@ -32,7 +32,7 @@ WIFI_CONFIG_PATH: str = "/media/rpi_user/RPi config/config.txt"
 async def handle_gemini_answer(yt: YouTubeSession, tool: str, content: str):
     if tool == "PLAY":
         play_voice(YT_SEARCH_VOICE_LOCATION)
-        await yt.find_and_a_play_song(content)
+        await yt.find_and_play_a_song(content)
     elif tool == "ANSWER":
         play_voice(THINKING_VOICE_LOCATION)
         await text_to_speech(content)
