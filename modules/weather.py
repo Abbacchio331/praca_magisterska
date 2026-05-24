@@ -47,7 +47,7 @@ async def get_weather(user_question: str, city: str, date: str) -> str | None:
     print(f"Moduł pogodowy został zapytany o miasto: {str(city)}")
 
     if date_obj is None:
-        print("Incorrect date format")
+        print("Nieprawidłowy format daty")
         return None
 
     try:
@@ -62,7 +62,7 @@ async def get_weather(user_question: str, city: str, date: str) -> str | None:
                     return ask_gemini(weather_answer_formatting_prompt.format(user_question, weather_info),
                                       tool_selection=False)
 
-            print("Date not found")
+            print("Data nie została znaleziona")
             return None
 
     except python_weather.errors.RequestError as error:
