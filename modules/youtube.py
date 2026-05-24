@@ -46,7 +46,7 @@ class YouTubeSession:
 
         print("YouTube Music jest gotowy.")
 
-    async def find_and_a_play_song(self, title: str, wait_time: int = 30):
+    async def find_and_play_a_song(self, title: str, wait_time: int = 30):
         if self.page is None:
             print("Strona nie istnieje.")
             play_voice(BLANK_PAGE_VOICE_LOCATION)
