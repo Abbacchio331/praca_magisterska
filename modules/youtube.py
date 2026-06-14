@@ -212,16 +212,16 @@ class YouTubeSession:
             else:
                 print("Nie udało się zatrzymać piosenki.\nPowód:", e)
         else:
-            print("Zatrzymano oddtwarzanie piosenki.")
+            print("Zatrzymano odtwarzanie piosenki.")
 
     async def resume_song(self):
         try:
             await self.page.locator('button.yt-icon-button[aria-label="Play"]').first.click(timeout=3000)
         except Exception as e:
             if "timeout" in str(e).lower():
-                print("Ta piosenka już jest oddtwarzana.")
+                print("Ta piosenka już jest odtwarzana.")
             else:
-                print("Nie udało się wznowić oddtwarzanie piosenki.\nPowód:", e)
+                print("Nie udało się wznowić odtwarzanie piosenki.\nPowód:", e)
         else:
             print("Wznowiono odtwarzanie.")
 
